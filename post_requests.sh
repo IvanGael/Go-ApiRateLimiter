@@ -1,6 +1,6 @@
 #!/bin/bash
 
-url="http://localhost:8080/submit"
+url="http://localhost:8080/api/submit"
 
 while true; do
   for i in {1..5}; do

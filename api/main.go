@@ -1,39 +1,71 @@
+// main.go
 package main
 
 import (
+	"api-rate-limiter/limiter"
 	"fmt"
 	"net/http"
-
-	"api-rate-limiter/limiter"
+	"time"
 )
 
 func main() {
 	registry := limiter.NewAPIRegistry()
-	registry.RegisterAPI("exampleAPI", 5, 10)              // Global rate: 5 requests per second, burst capacity: 10
-	registry.RegisterAPIMethod("exampleAPI", "GET", 2, 5)  // GET method: 2 requests per second, burst capacity: 5
-	registry.RegisterAPIMethod("exampleAPI", "POST", 1, 2) // POST method: 1 request per second, burst capacity: 2
 
+	// Register an API with enhanced configuration
+	apiConfig := limiter.APIConfig{
+		BaseURL:      "http://localhost:8080",
+		RateLimit:    100,  // Global rate limit
+		BurstLimit:   20,   // Global burst limit
+		IPBasedLimit: true, // Enable IP-based rate limiting
+		RequireAuth:  true,
+		Timeout:      time.Second * 30,
+		Headers: map[string]string{
+			"X-API-Key": "required", // Required headers
+		},
+		Methods: map[string]limiter.MethodConfig{
+			"GET": {
+				RateLimit:    50,
+				BurstLimit:   10,
+				PathPatterns: []string{"/api/*"},
+				Enabled:      true,
+			},
+			"POST": {
+				RateLimit:    20,
+				BurstLimit:   5,
+				PathPatterns: []string{"/api/submit/*"},
+				Enabled:      true,
+			},
+		},
+	}
+
+	err := registry.RegisterAPI(apiConfig)
+	if err != nil {
+		fmt.Printf("Failed to register API: %v\n", err)
+		return
+	}
+
+	// Create routes
 	mux := http.NewServeMux()
-	mux.HandleFunc("/data", func(w http.ResponseWriter, r *http.Request) {
-		_, err := fmt.Fprintf(w, "Here is some data.")
-		if err != nil {
-			return
-		}
+
+	mux.HandleFunc("/api/data", func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(time.Millisecond * 100) // Simulate processing time
+		fmt.Fprintf(w, "Data retrieved successfully")
 	})
 
-	mux.HandleFunc("/submit", func(w http.ResponseWriter, r *http.Request) {
-		_, err := fmt.Fprintf(w, "Data submitted.")
-		if err != nil {
-			return
-		}
+	mux.HandleFunc("/api/submit", func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(time.Millisecond * 200) // Simulate processing time
+		fmt.Fprintf(w, "Data submitted successfully")
 	})
 
-	rateLimitedMux := registry.Middleware("exampleAPI", mux)
+	// Apply rate limiting middleware
+	rateLimitedMux := registry.Middleware("http://localhost:8080", mux)
 
-	go registry.DisplayStats() // Start the statistics display in a separate goroutine
+	// Start statistics display in a separate goroutine
+	go registry.DisplayEnhancedStats()
 
+	// Start server
 	fmt.Println("Starting server on :8080")
 	if err := http.ListenAndServe(":8080", rateLimitedMux); err != nil {
-		fmt.Println("Server failed:", err)
+		fmt.Printf("Server failed: %v\n", err)
 	}
 }

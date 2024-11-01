@@ -1,6 +1,6 @@
 #!/bin/bash
 
-url="http://localhost:8080/data"
+url="http://localhost:8080/api/data"
 
 while true; do
   for i in {1..10}; do
